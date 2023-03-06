@@ -1,0 +1,1565 @@
+local module = require(script.settings)
+local StatsModule = require(script.stats)
+local eventsModule = require(script.events)
+local puntModule = require(script.punts)
+local othersettings = require(game.ReplicatedStorage.env)
+local aimodule = require(script.ai)
+
+-- Variables
+local physicsService = game:GetService("PhysicsService")
+local AttributesFolder = game.ReplicatedStorage:FindFirstChild('Attributes')
+local PreGameText = AttributesFolder.PreGameText.Value
+
+local soundfolder = game.ReplicatedStorage:WaitForChild('GameSounds')
+
+
+-- Functions
+
+physicsService:CreateCollisionGroup('Players')
+
+
+
+
+function getTeamCaptains()
+	task.wait(2)
+	local TeamCap1 = ""
+	local TeamCap2 = ""
+
+	local unChosenPlayers = {}
+
+	for i,v in pairs(game.Players:GetPlayers()) do
+		table.insert(unChosenPlayers, v.Name)
+	end
+
+	local function RandomizeOne()
+		local players = game:GetService("Players"):GetPlayers()
+		TeamCap1 = unChosenPlayers[math.random(1, #unChosenPlayers)]
+		AttributesFolder.Captain.TeamCap1.Value = TeamCap1
+		table.remove(unChosenPlayers, table.find(unChosenPlayers, TeamCap1))
+	end
+	RandomizeOne()
+
+	local function RandomizeTwo()
+		local players = game:GetService("Players"):GetPlayers()
+		TeamCap2 = unChosenPlayers[math.random(1, #unChosenPlayers)]
+		AttributesFolder.Captain.TeamCap2.Value = TeamCap2
+	end
+
+	RandomizeTwo()
+	
+	
+
+end
+
+function PlayerAdded(player)
+	task.wait(1)
+	StatsModule.CreateStats(player)
+	game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+	
+end
+
+-- Events
+
+game.Players.PlayerAdded:Connect(function(player)
+	PlayerAdded(player)
+end)
+
+game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('ChosenTeam').OnServerEvent:Connect(function(player, ChosenTeam)
+	if player.Name == AttributesFolder.Captain.TeamCap1.Value then
+		game.ReplicatedStorage:FindFirstChild('GameSettings'):FindFirstChild('Team1').Value = ChosenTeam.Name
+
+	else
+		if player.Name == AttributesFolder.Captain.TeamCap2.Value then
+			game.ReplicatedStorage:FindFirstChild('GameSettings'):FindFirstChild('Team2').Value = ChosenTeam.Name
+		end
+	end
+	local Player1 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap1.Value)
+	local Player2 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap2.Value)
+	eventsModule.SpawnStadium()
+
+	if game.ReplicatedStorage:WaitForChild('GameSettings'):WaitForChild('Team1').Value == "" or game.ReplicatedStorage:WaitForChild('GameSettings'):WaitForChild('Team2').Value == "" then
+		-- # do nothing
+	else
+		-- eventsModule.TeleportCaptains(Player1, Player2)
+		game.ReplicatedStorage.SystemEvents.PromptTeamSelection:FireAllClients()
+		game.ReplicatedStorage.Attributes.InVotingTab.Value = true
+		AttributesFolder.PlayerSelection.WhoTurn.Value = Player1.Name
+
+		return
+	end
+end)
+
+gotreturn = false
+game.ReplicatedStorage.SystemEvents.ReceiveGameOption.OnServerEvent:Connect(function(player, Chosen)
+
+
+	local TeamName = ''
+	local TeamCaptain = ''
+
+	local function getTeam()
+		if AttributesFolder.Captain.TeamCap1.Value == player.Name then
+			TeamName = game.ReplicatedStorage.GameSettings.Team1.Value
+			TeamCaptain = player.Name
+		else
+			if AttributesFolder.Captain.TeamCap2.Value == player.Name then
+				TeamName = game.ReplicatedStorage.GameSettings.Team2.Value
+				TeamCaptain = player.Name
+			end
+		end
+	end
+	getTeam()
+	if player.Name == AttributesFolder.Captain.TeamCap1.Value or player.Name == AttributesFolder.Captain.TeamCap2.Value and gotreturn == false then
+
+		game.ReplicatedStorage.SystemEvents.disableCoinTossFrame:FireAllClients()
+
+		local random = math.random(1, 2)
+		if random == 1 and gotreturn == false then
+			gotreturn = true
+			print('heads won')
+			game.ReplicatedStorage.GameSettings.WhoWonCoinFlip.Value = TeamName
+			game.ReplicatedStorage.GameSettings.WhoHasBall.Value = TeamName
+			TeamCaptain = game.Players:FindFirstChild(TeamCaptain)
+		else
+			if random == 2 and gotreturn == false then
+				gotreturn = true
+				print('tails won')
+				game.ReplicatedStorage.GameSettings.WhoWonCoinFlip.Value = TeamName
+				game.ReplicatedStorage.GameSettings.WhoHasBall.Value = TeamName
+
+			end
+		end
+		PreGameText = 'Game is starting, ' .. game.ReplicatedStorage.GameSettings.WhoHasBall.Value .. ' is receiving the ball.'
+		print(game.ReplicatedStorage.GameSettings.WhoHasBall.Value .. ' has the ball')
+		
+		
+		puntModule.getKickOffStatus(player)
+
+		eventsModule.StartGame()
+	end
+
+end)
+
+
+
+local Players = {}
+local HomeTeam = {}
+local AwayTeam = {}
+
+function teamPlayersAfterSelection()
+	print(HomeTeam)
+	print(AwayTeam)
+	for i,v in pairs(HomeTeam) do
+		print(v)
+		if game.Players:FindFirstChild(v) then
+			local player = game.Players:FindFirstChild(v)
+			print(game.ReplicatedStorage.GameSettings.Team1.Value)
+			player.Team = game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value)
+			print(player.Team)
+			table.remove(HomeTeam, table.find(HomeTeam, v))
+			print('ran')
+			
+		end
+	end
+
+	for i,v in pairs(AwayTeam) do
+		print(v)
+		if game.Players:FindFirstChild(v) then
+			local player = game.Players:FindFirstChild(v)
+			print(game.ReplicatedStorage.GameSettings.Team2.Value)
+			player.Team = game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team2.Value)
+			print(player.Team)
+			table.remove(AwayTeam, table.find(AwayTeam, v))
+			print('ran')
+			
+		end
+	end
+
+	game.ReplicatedStorage.Attributes.InVotingTab.Value = false
+	
+	
+	--[[ give players helmets/jersey etc]]
+	
+	
+end
+
+
+
+function addAllPlayers()
+	for i,Player in pairs(game.Players:GetPlayers()) do
+		if game.Players:FindFirstChild(Player.Name) then
+			table.insert(Players, Player.Name)
+		end
+	end
+end
+
+
+function switchPlayerSelection()
+	game.ReplicatedStorage.SystemEvents.SwitchSelection:FireAllClients()
+
+	if AttributesFolder.PlayerSelection.WhoTurn.Value == AttributesFolder.Captain.TeamCap1.Value then
+		AttributesFolder.PlayerSelection.WhoTurn.Value = AttributesFolder.Captain.TeamCap1.Value
+		game.ReplicatedStorage.SystemEvents.SwitchSelection:FireAllClients()
+		print('Changed The Selection 111')
+	else
+		if AttributesFolder.PlayerSelection.WhoTurn.Value == AttributesFolder.Captain.TeamCap2.Value then
+			AttributesFolder.PlayerSelection.WhoTurn.Value = AttributesFolder.Captain.TeamCap2.Value
+			game.ReplicatedStorage.SystemEvents.SwitchSelection:FireAllClients()
+			print('Changed The Selection 222')
+		end
+	end
+end
+
+function restartGame()
+	
+end
+
+
+function TpTeamYards(player, TeamType)
+	print(game.ReplicatedStorage.GameSettings.WhoHasBall.Value)
+	if game.ReplicatedStorage.GameSettings.WhoHasBall.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value).Name then
+		task.wait(1.4) -- keep this
+		print('is Team Type')
+		TeamType = ''
+		for i, Players in pairs(game.Players:GetPlayers()) do
+			for i,Team1Players in pairs(game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):GetPlayers()) do -- Team1 Teleportation
+				print(Team1Players)
+				print(game.ReplicatedStorage.GameSettings.Team1.Value)
+				
+				if not player then restartGame() return end -- recursion
+					
+					local TpPosition = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value):FindFirstChild('PlayerTP')
+					local BallPosition = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value):FindFirstChild('BallSpawn')
+				if Team1Players.Character then
+					local yardage = game.ReplicatedStorage.GameStats.Yardage
+					
+					game.ReplicatedStorage.GameStats.GameIGYards.Value = player.IGYards.Value
+					
+						
+						if Players.Character:FindFirstChild('Football') then
+							Players.Character:FindFirstChild('Football').Parent = Players
+							Players:FindFirstChild('Football'):Destroy()
+						end
+						for i,fbs in pairs(workspace:GetChildren()) do
+							if fbs.Name == 'Football' or fbs.Name == 'Handle' then
+								fbs:Destroy()
+							end
+						end
+						if not workspace:FindFirstChild('Football') then
+							physicsService:CollisionGroupSetCollidable("Players","Players",false)
+						print(BallPosition)
+						
+						if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'CaughtPosition' then
+							local p = game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value)
+							if p then
+								local charhrp = p.Character.HumanoidRootPart.Position
+								local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Position
+								local status = 'gain ' .. (charhrp + ScrimLine).Magnitude -- distance from how far the player caught the ball outside of the scrim line (not correct so do some math to get the correct yards)
+								game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+							end
+						end
+						
+						game.ReplicatedStorage.GameStats.Status.Value = ''
+							
+						
+						if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'throwingPosition'  then -- qb sack
+							print('is throwing position')
+							print(game.ReplicatedStorage.Attributes.Ball.BallStatus.Value)
+							
+							local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')
+							ScrimLine.Position = Vector3.new(workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.X + 18, workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.Y, workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.Z)
+							ScrimLine.Transparency = 0
+							local YarddBarrier = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier')
+							YarddBarrier.Position = ScrimLine.Position
+							YarddBarrier.CanCollide = true
+							
+							
+							local PTP = Vector3.new(TpPosition.Position.X + 35, TpPosition.Position.Y, TpPosition.Position.Z)
+							local BTP = Vector3.new(BallPosition.Position.X + 35, BallPosition.Position.Y, BallPosition.Position.Z)
+							Team1Players.Character.HumanoidRootPart.Position = PTP
+							
+							
+							
+							
+							
+							
+						else -- qb is not sacked therefore continue with the regular code
+							if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'IncompletePosition' then
+								-- # do nothing
+
+								game.ReplicatedStorage.Attributes.Ball.canBeThrown.Value = false
+
+								physicsService:CollisionGroupSetCollidable("Players","Players",true)
+							else
+								if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value ~= 'throwingPosition' or game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'FirstDownPosition' then
+									print('not sacked running')
+									local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')
+									ScrimLine.Position = Vector3.new(workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.X + 18, workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.Y, workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position.Z)
+									ScrimLine.Transparency = 0
+									local YarddBarrier = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier')
+									YarddBarrier.Position = ScrimLine.Position
+									YarddBarrier.CanCollide = true
+									local Yardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline')
+									local foundyardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position
+									Yardline.Position = Vector3.new(foundyardline.X + -23, foundyardline.Y, foundyardline.Z)
+									Yardline.Transparency = 0
+									game.ReplicatedStorage.TeamsBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+									game.ReplicatedStorage.SystemEvents.scoreboard.startPlayClock:FireAllClients()
+
+
+									
+
+									game.ReplicatedStorage.Attributes.Ball.canBeThrown.Value = false
+									Team1Players.Character.HumanoidRootPart.Position = TpPosition.Position
+
+									physicsService:CollisionGroupSetCollidable("Players","Players",true)
+
+
+
+							--[[
+							handle conversion of studs to yards]]
+
+
+								end
+							end
+							
+							
+							
+						end
+						
+						if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'IncompletePosition' then
+							local fb = game.ReplicatedStorage.Football.Handle:Clone()
+							fb.Parent = workspace
+							local tpP = (workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline'))
+							Team1Players.Character.HumanoidRootPart.Position = Vector3.new(tpP.Position.X + 20, tpP.Position.Y, tpP.Position.Z - 25)
+							fb.Position = Vector3.new(tpP.Position.X + 18, tpP.Position.Y, tpP.Position.Z)
+							workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = true
+						else
+							workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = true
+							local PTP = Vector3.new(TpPosition.Position.X + 25, TpPosition.Position.Y, TpPosition.Position.Z)
+							local BTP = Vector3.new(BallPosition.Position.X + 25, BallPosition.Position.Y, BallPosition.Position.Z)
+							
+							local fb = game.ReplicatedStorage.Football.Handle:Clone()
+							fb.Parent = workspace
+							Team1Players.Character.HumanoidRootPart.Position = PTP
+							fb.Position = BTP
+						end
+						
+						
+						
+						
+						
+						local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')	
+						local Yardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline')
+						local studs = (ScrimLine.Position - Yardline.Position).Magnitude
+						print(studs)
+						game.ReplicatedStorage.GameStats.Yardage.Value = studs
+						
+						--game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+						
+						
+						--game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+						
+
+
+					end
+				end
+				end
+		end
+		print(game.ReplicatedStorage.GameSettings.Team2.Value)
+		
+		for i,Team2Players in pairs(game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team2.Value):GetPlayers()) do -- TP Defense where they need to be
+			print(Team2Players)
+			local DefenseTP = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').Position
+			Team2Players.Character.HumanoidRootPart.Position = Vector3.new(DefenseTP.X - 20, DefenseTP.Y, DefenseTP.Z)
+			print('Tped Defense')
+			wait()
+			
+			break
+		end
+	
+		
+	end
+		if game.ReplicatedStorage.GameSettings.WhoHasBall.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team2.Value).Name then
+			print('TEMA 2 FIRED')
+			TeamType = ''
+		if player then
+			for i, Players in pairs(game.Players:GetPlayers()) do
+				for i,Team2Players in pairs(game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team2.Value):GetPlayers()) do -- Team1 Teleportation
+					print(Team2Players)
+					print(game.ReplicatedStorage.GameSettings.Team2.Value)
+					print('passed name')
+					local PlayerYardage = 0
+					-- PlayerYardage = player:FindFirstChild('IGYards').Value
+
+					local TpPosition = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value):FindFirstChild('PlayerTP')
+					local BallPosition = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value):FindFirstChild('BallSpawn')
+
+					if Team2Players.Character then
+						local yardage = game.ReplicatedStorage.GameStats.Yardage
+
+						game.ReplicatedStorage.GameStats.Status.Value = ''
+
+						-- game.ReplicatedStorage.GameStats.GameIGYards.Value = player.IGYards.Value
+
+						if Players.Character:FindFirstChild('Football') then
+							Players.Character:FindFirstChild('Football').Parent = Players
+							Players:FindFirstChild('Football'):Destroy()
+						end
+
+						for i,fbs in pairs(workspace:GetChildren()) do
+							if fbs.Name == 'Football' or fbs.Name == 'Handle' then
+								fbs:Destroy()
+							end
+						end
+						if not workspace:FindFirstChild('Football') then
+							physicsService:CollisionGroupSetCollidable("Players","Players",false)
+							print('not found, running still')
+
+							
+							if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'throwingPosition' then -- qb sacked
+								print('IS THROWING POSITION TEAM 2')
+								local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')	
+								local Yardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline')
+								local YarddBarrier = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier')			
+								YarddBarrier.Position = ScrimLine.Position				
+								YarddBarrier.CanCollide = true
+								ScrimLine.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position			
+								ScrimLine.Transparency = 0		
+								ScrimLine.Position = Vector3.new(ScrimLine.Position.X - 18, ScrimLine.Position.Y, ScrimLine.Position.Z) -- birng blue line to defense
+								YarddBarrier.Position = ScrimLine.Position
+								
+								
+								
+								local PTP = Vector3.new(TpPosition.Position.X - 35, TpPosition.Position.Y, TpPosition.Position.Z)
+								local BTP = Vector3.new(BallPosition.Position.X - 35, BallPosition.Position.Y, BallPosition.Position.Z)
+								Team2Players.Character.HumanoidRootPart.Position = PTP
+
+								
+								print('RAN TR')
+								
+							else -- qb is not sacked (move both chains)
+								print(game.ReplicatedStorage.Attributes.Ball.BallStatus.Value)
+								if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'IncompletePosition' then
+									-- # do nothing
+								else
+									print(game.ReplicatedStorage.Attributes.Ball.BallStatus.Value)
+									if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value ~= 'throwingPosition' or game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'FirstDownPosition' or game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'InterceptionPosition' then
+										print('NOT THROWING POSITION TEAM 2')
+										local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')	
+
+										local YarddBarrier = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier')			
+										YarddBarrier.Position = ScrimLine.Position				
+										YarddBarrier.CanCollide = true
+										local Yardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline')
+										local foundyardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position
+
+
+										ScrimLine.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):FindFirstChild(player.IGYards.Value).Position			
+										ScrimLine.Transparency = 0		
+										ScrimLine.Position = Vector3.new(ScrimLine.Position.X - 18, ScrimLine.Position.Y, ScrimLine.Position.Z) -- birng blue line to defense
+										YarddBarrier.Position = ScrimLine.Position
+
+										Yardline.Position = Vector3.new(foundyardline.X + 18, foundyardline.Y, foundyardline.Z)		-- bring yellow line 18 studs away from blue line(10 yards)
+										Yardline.Transparency = 0	
+								end
+								
+									
+									
+								
+								end
+								
+								
+								
+								
+								
+							end
+							
+						
+							if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'IncompletePosition' then
+								print('incomplete pos')
+								local fb = game.ReplicatedStorage.Football.Handle:Clone()
+								fb.Parent = workspace
+								local tpP = (workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline'))
+								Team2Players.Character.HumanoidRootPart.Position = Vector3.new(tpP.Position.X - 18, tpP.Position.Y, tpP.Position.Z - 25)
+								fb.Position = Vector3.new(tpP.Position.X - 18, tpP.Position.Y, tpP.Position.Z)
+								workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = true
+							else
+								workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = true
+								local fb = game.ReplicatedStorage.Football.Handle:Clone()					
+								fb.Parent = workspace					
+								fb.Position = BallPosition.Position			
+
+
+								local PTP = Vector3.new(TpPosition.Position.X - 35, TpPosition.Position.Y, TpPosition.Position.Z)
+								local BTP = Vector3.new(BallPosition.Position.X - 35, BallPosition.Position.Y, BallPosition.Position.Z)
+								Team2Players.Character.HumanoidRootPart.Position = PTP
+								fb.Position = BTP
+								print('TELEPORTED TEAM2 PLAYERS')
+
+							end
+							
+							--game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+							local ScrimLine = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline')	
+							local Yardline = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline')
+							local studs = (ScrimLine.Position - Yardline.Position).Magnitude
+							print(studs)
+							game.ReplicatedStorage.GameStats.Yardage.Value = studs
+
+
+						--[[
+						
+						move both TP parts and reTP the players]]
+
+							
+
+
+							game.ReplicatedStorage.TeamsBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value						
+							game.ReplicatedStorage.SystemEvents.scoreboard.startPlayClock:FireAllClients()					
+							print('created ball')					
+							print(BallPosition)						
+					
+							print(yardage.Value)
+							game.ReplicatedStorage.Attributes.Ball.canBeThrown.Value = false
+							physicsService:CollisionGroupSetCollidable("Players","Players",true)
+
+							
+							--game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground' 
+						end
+					end
+				end
+				for i,Team1Players in pairs(game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):GetPlayers()) do -- TP Defense where they need to be
+					print(Team1Players)
+					local DefenseTP = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').Position
+					Team1Players.Character.HumanoidRootPart.Position = Vector3.new(DefenseTP.X + 25, DefenseTP.Y, DefenseTP.Z)
+					print('TPED TEAM 1 DEFENSE')
+					
+					break
+				end		
+			end
+		end
+	end
+
+end
+
+function check()
+	
+end
+
+-- events
+
+game.ReplicatedStorage.GameStats.Time.Changed:Connect(function()
+	if game.ReplicatedStorage.GameStats.Time.Value < 0 then
+		game.ReplicatedStorage.GameStats.Time.Value = 0
+	end
+end)
+
+game.ReplicatedStorage.GameStats.Time.Changed:Connect(function()
+	if game.ReplicatedStorage.GameStats.Time.Value <= 0 then
+		
+		for i,Players in pairs(game.Players:GetPlayers()) do
+			if Players:FindFirstChild('Football') then
+				-- # do nothing
+				repeat wait() until not Players:FindFirstChild('Football') break
+			else
+				if game.ReplicatedStorage.GameStats.Quarter.Value == 3 then
+					PreGameText = 'Half Time!'
+					game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+					game.ReplicatedStorage.GameStats.Quarter.Value += 1
+					
+					Players.Character.HumanoidRootPart.Position = workspace.HalfTimeTP.Position
+					task.wait(othersettings.GameSettings.TIME_FOR_HALF_TIME)
+					local TeamType = ''
+					if game.ReplicatedStorage.GameSettings.WhoWonCoinFlip.Value == game.ReplicatedStorage.GameSettings.Team1.Value then
+						game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+						puntModule.Team2KickOff()
+						TeamType = 'Team2'
+					else
+						if game.ReplicatedStorage.GameSettings.WhoWonCoinFlip.Value == game.ReplicatedStorage.GameSettings.Team2.Value then
+							game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+							puntModule.Team1KickOff()
+							TeamType = 'Team1'
+						end
+					end
+					
+					for i,v in pairs(workspace:GetChildren()) do
+						if v.Name == 'Handle' then
+							v:Destroy()
+						end
+					end
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'Punt'
+					game.ReplicatedStorage.GameStats.Time.Value = othersettings.GameSettings.TIME_PER_QUARTER
+					workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Transparency = 1
+					workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline').Transparency = 1
+					workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = false
+					aimodule.SpawnAI(TeamType)
+					
+					game.ReplicatedStorage.GameStats.Time.Value = othersettings.GameSettings.TIME_PER_QUARTER
+				else
+					PreGameText = 'Quarter changing... Starting in 5 seconds'
+					game.ReplicatedStorage.GameStats.Quarter.Value += 1
+					game.ReplicatedStorage.GameStats.Time.Value = othersettings.GameSettings.TIME_PER_QUARTER
+					game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+					
+					Players.Character.Humanoid.WalkSpeed = 0
+					
+					task.wait(7.5)
+					
+					PreGameText = ''
+					game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+					
+					eventsModule.CreateScoreBoard() -- refreshing the scoreboard so the time value gets updated 
+					local player = nil
+					
+					for i,s in pairs(game.Players:GetPlayers()) do
+						if s.Team.Name == game.ReplicatedStorage.GameSettings.WhoHasBall.Value then
+							player = s
+						end
+					end
+					
+					print(player)
+					TpTeamYards(player)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+					Players.Character.Humanoid.WalkSpeed = 16
+					for i,v in pairs(workspace:GetChildren()) do if v:IsA('Sound') then v.Playing = true end end 
+					break 
+					
+				end
+			end
+		end
+		
+		
+		
+	
+		
+		
+			
+		
+	end
+end)
+
+game.ReplicatedStorage.SystemEvents.ScrimLineEvent.OnServerEvent:Connect(function(player)
+	if player.Name == game.ReplicatedStorage.GameStats.Status.Value then
+		
+	end
+end)
+
+game.ReplicatedStorage.SystemEvents.FirstDownEvent.OnServerEvent:Connect(function(player) -- listen for if the player with the ball steps on the yellow line
+	if player.Name == game.ReplicatedStorage.GameStats.Status.Value then
+		game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'FirstDownPosition'
+		TpTeamYards()
+		wait(1.2)
+		game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+		game.ReplicatedStorage.GameStats.CurrentDown.Value = '1'
+		print('tped and 1st down')
+	end
+end)
+
+game.ReplicatedStorage.GameStats.Status.Changed:Connect(function()
+	print(game.ReplicatedStorage.Attributes.Ball.BallStatus.Value)
+	if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'on ground' then
+		local player = game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value)
+		if player then
+			print('CHANGED WALKSPEED AND HIKING POS')
+			player.Character.Humanoid.WalkSpeed = 0 -- Player is QB so set the player's value to 0
+			game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'HikingPosition'
+			game.ReplicatedStorage.Attributes.Ball.canBeThrown.Value = false
+			
+		end
+	end
+end)
+
+
+
+game.ReplicatedStorage.SystemEvents.ChoosePlayer.OnServerEvent:Connect(function(player, ButtonName)
+	print('Received')
+	print(ButtonName)
+	if game.ReplicatedStorage.Attributes.Captain.TeamCap1.Value == player.Name or game.ReplicatedStorage.Attributes.Captain.TeamCap2.Value == player.Name and game.ReplicatedStorage.Attributes.PlayerSelection.WhoTurn.Value == player.Name then
+		local TeamType = ''
+		if game.ReplicatedStorage.Attributes.Captain.TeamCap1.Value == player.Name and game.ReplicatedStorage.Attributes.PlayerSelection.WhoTurn.Value == player.Name then
+			TeamType = 'Team1'
+			AttributesFolder.PlayerSelection.WhoTurn.Value = AttributesFolder.Captain.TeamCap2.Value
+			table.insert(HomeTeam, ButtonName)
+			switchPlayerSelection()
+		else
+			if game.ReplicatedStorage.Attributes.Captain.TeamCap2.Value == player.Name and game.ReplicatedStorage.Attributes.PlayerSelection.WhoTurn.Value == player.Name then
+				TeamType = 'Team2'
+				AttributesFolder.PlayerSelection.WhoTurn.Value = AttributesFolder.Captain.TeamCap1.Value
+				table.insert(AwayTeam, ButtonName)
+				switchPlayerSelection()
+			end
+		end
+		game.ReplicatedStorage.SystemEvents.addToTeam:FireAllClients(ButtonName, TeamType)
+		TeamType = ''
+
+
+	end
+end)
+
+local tpedCaptains = false
+game.ReplicatedStorage.SystemEvents.communicate.DPlayerList.OnServerEvent:Connect(function()
+	print('ran twice/!?!??!')
+	if game.ReplicatedStorage.GameStats.Quarter.Value < 1 and tpedCaptains == false then
+		tpedCaptains = true
+		game.ReplicatedStorage.SystemEvents.communicate.DPlayerList:FireAllClients()
+
+		local Player1 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap1.Value)
+		local Player2 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap2.Value)
+		
+		
+	
+		
+		--[[
+		local function givePlayerJersey(player)
+			print('received')
+			if game.ReplicatedStorage.GameJerseys:FindFirstChild(player.Team.Name) then
+				print('found jersey')
+				local Clone = game.ReplicatedStorage.GameJerseys:FindFirstChild(player.Team.Value):Clone()
+				Clone.Name = 'StarterPlayer'
+				Clone.Parent = game:GetService('StarterPlayer')
+				wait(.1)
+				player:LoadCharacter()
+
+			else
+				print('Did not find a jersey for your team')
+			end
+		end]]
+		
+		eventsModule.CreateTeams()
+		teamPlayersAfterSelection()
+		
+		--[[ jersey manipulation
+		
+		
+
+]]
+		task.wait(1.5)
+		eventsModule.TeleportCaptains(Player1, Player2)
+		
+		
+		
+		game.ReplicatedStorage.SystemEvents.PromptGameOption:FireClient(Player1)
+		game.ReplicatedStorage.SystemEvents.PromptGameOption:FireClient(Player2)
+	end
+end)
+
+local db = false
+
+
+
+game.ReplicatedStorage.GameStats.Status.Changed:Connect(function(Change)
+	print(game.ReplicatedStorage.GameStats.Status.Value)
+	for i,lplayer in pairs(game.Players:GetChildren()) do
+		if game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value) then
+			for i,n in pairs(workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('OutOfBounds'):GetChildren()) do
+				if n:IsA('Part') then
+					n.Touched:Connect(function(hit)
+						if db == false then
+							db = true
+							local player = game.Players:GetPlayerFromCharacter(hit.Parent)
+							if hit.Parent:FindFirstChild('Humanoid') then
+								for i,pp in pairs(game.Players:GetPlayers()) do
+									if pp:IsA('Player') then
+										if player.Name == game.ReplicatedStorage.GameStats.Status.Value then
+											if game.ReplicatedStorage.GameStats.Status.Value == player.Name and game.ReplicatedStorage.GameStats.ClockStopped.Value == false and player.Character:FindFirstChild('Football') then
+												print(game.ReplicatedStorage.GameStats.Status.Value)
+												game.ReplicatedStorage.GameStats.ClockStopped.Value = true
+												local status = 'OUT OF BOUNDS'
+												
+												game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+												eventsModule.StopScoreBoard()
+												-- Teleport Team1 and Team2
+												task.wait(1.5)
+												TpTeamYards(player)
+												game.ReplicatedStorage.GameStats.Status.Value = 'on ground'
+
+											end
+										end
+									end
+								end
+							end
+						end
+						wait(1.5)
+						db = false
+					end)
+
+				end
+			end
+
+			--[[
+			for i,yards in pairs(workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('YardLines'):GetChildren()) do
+				if yards:IsA('Part') then
+					yards.Touched:Connect(function(hit)
+						local player = game.Players:GetPlayerFromCharacter(hit.Parent)
+						if hit.Parent:FindFirstChild('Humanoid') then
+							player:FindFirstChild('IGYards').Value = yards:FindFirstChild('yards').Parent.Name
+						end
+					end)
+				end
+
+			end]]
+
+		end
+	end
+end)
+
+
+
+game.ReplicatedStorage.SystemEvents.yardsStepEvent.OnServerEvent:Connect(function(player, current) -- used an event to detect what yard a player is on locally to prevent server lag
+	player:FindFirstChild('IGYards').Value = current:FindFirstChild('yards').Parent.Name
+end)
+
+--[[ needs to be worked on: (gameplay)
+interceptions
+sacks
+touchdowns
+turnovers
+bug testing
+kickoff for team2
+punting
+
+]]
+
+
+function turnOverBall()
+	game.ReplicatedStorage.GameStats.CurrentDown.Value = 1
+	game.ReplicatedStorage.GameStats.Status.Value = ''
+	game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'FirstDownPosition'
+		print(game.ReplicatedStorage.GameSettings.WhoHasBall.Value)
+		if game.ReplicatedStorage.GameSettings.Team1.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.WhoHasBall.Value).Name then
+		game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+		local player = game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value)
+		TpTeamYards(player)
+		game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+		local status = 'TURNOVER ON ' .. game.ReplicatedStorage.GameSettings.Team1.Value
+		game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+		
+		else
+		if game.ReplicatedStorage.GameSettings.Team2.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.WhoHasBall.Value).Name then
+			game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+			local player = game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value)
+			TpTeamYards(player)
+			game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+			local status = 'TURNOVER ON ' .. game.ReplicatedStorage.GameSettings.Team2.Value
+			game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+		end
+	end
+	
+	game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = ''
+	
+	
+end
+
+function incompletePass()
+	print('Incomplete Pass')
+end
+
+
+
+
+game.ReplicatedStorage.SystemEvents.QBThrewBall.OnServerEvent:Connect(function(player)
+	while true do
+		wait()
+		print(game.ReplicatedStorage.GameStats.Status.Value)
+		if game.ReplicatedStorage.Attributes.Ball.inAir.Value == false then
+
+			if game.ReplicatedStorage.GameStats.Status.Value == player.Name then
+				game.ReplicatedStorage.GameStats.Status.Value = ''
+			end
+
+			if game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value) then
+				if game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value) then
+					print('wsa caught ')
+					if game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value).Team ~= player.Team then
+						print('Interceptions!!!!')
+						local status = 'Interception by ' .. game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value).Name
+						local sound = soundfolder:WaitForChild('CrowdReaction')
+						sound.Parent = workspace
+						sound:Play()
+						sound.Ended:Wait()
+						sound:Destroy()
+						game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+						game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'InterceptionPosition'
+
+						break 
+					else
+						print('caughttttttttttttt')
+						local sound = soundfolder:WaitForChild('CrowdReaction')
+						sound.Parent = workspace
+						sound:Play()
+						sound.Ended:Wait()
+						sound:Destroy()
+						game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'CaughtPosition'
+						break
+					end
+				end
+			else
+
+
+				if game.ReplicatedStorage.GameStats.CurrentDown.Value == 4 then
+					eventsModule.StopScoreBoard()
+					game.ReplicatedStorage.GameStats.CurrentDown.Value = 1
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'FirstDownPosition'
+					-- change who has the ball
+					if game.ReplicatedStorage.GameSettings.Team1.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.WhoHasBall.Value).Name then
+						game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+					else
+						if game.ReplicatedStorage.GameSettings.Team2.Value == game.Teams:FindFirstChild(game.ReplicatedStorage.GameSettings.WhoHasBall.Value).Name then
+							game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+						end
+					end
+					TpTeamYards(player)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+				else
+					eventsModule.StopScoreBoard()
+					local status = 'INCOMPLETE'
+					game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'IncompletePosition'
+					task.wait(2.5)
+					print(player.Name)
+					print(game.ReplicatedStorage.Attributes.Ball.BallStatus.Value)
+					print(game.ReplicatedStorage.GameStats.CurrentDown.Value)
+					TpTeamYards(player)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'IncompletePosition'
+					game.ReplicatedStorage.GameStats.CurrentDown.Value += 1
+					task.wait(.4)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+				end
+
+				break
+			end
+
+
+
+		end
+
+	end
+end)
+
+game.ReplicatedStorage.SystemEvents.communicate.playerHike.OnServerEvent:Connect(function(player)
+	game.ReplicatedStorage.Attributes.Ball.canBeThrown.Value = true
+	game.ReplicatedStorage.Attributes.Positions.QB.Value = player.Name -- set a qb
+	local status = 'HIKE'
+	game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+	eventsModule.StartScoreBoard()
+	player.Character.Humanoid.WalkSpeed = 16
+	workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = false
+	game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'throwingPosition'
+	AttributesFolder.Ball.PlayBegun.Value = true
+end)
+
+
+
+-- Player being tackled and dealing with teleporting to yards
+
+game.Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(char)
+		char.Humanoid.StateChanged:Connect(function(oldState, newState)
+			if newState == Enum.HumanoidStateType.PlatformStanding then 
+				print(game.ReplicatedStorage.GameStats.Status.Value)
+					if game.ReplicatedStorage.GameStats.CurrentDown.Value >= 1 and game.ReplicatedStorage.GameStats.Status.Value == player.Name then
+						eventsModule.StopScoreBoard()
+					
+					
+					if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'ReceivingPunt' then
+						-- # do nothing
+					else
+						game.ReplicatedStorage.GameStats.CurrentDown.Value += 1
+					end
+					
+					if game.ReplicatedStorage.Attributes.Ball.BallStatus.Value == 'InterceptionPosition' then
+						turnOverBall()
+					end
+						
+						
+						wait(2.5)
+					char.Humanoid.PlatformStand = false
+					TpTeamYards(player)
+					game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'on ground'
+					
+				end
+			end
+		end)
+	end)
+end)
+
+game.ReplicatedStorage.GameStats.CurrentDown.Changed:Connect(function() -- Turnover the ball
+	if game.ReplicatedStorage.GameStats.CurrentDown.Value > 4  then 
+		turnOverBall()
+		print('Turnover')
+	end
+end)
+
+--[[
+game.ReplicatedStorage.GameStats.Status.Changed:Connect(function()
+	print('change')
+	print(game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value))
+	if game.Players:FindFirstChild(game.ReplicatedStorage.GameStats.Status.Value).Team.Name ~= game.ReplicatedStorage.GameSettings.WhoHasBall.Value then
+		print('not equals')
+		local status = 'DEFENSE RECOVERED'
+		game.ReplicatedStorage.SystemEvents.communicate.updateStatus:FireAllClients(status)
+		
+		task.wait(2.5)
+		turnOverBall()
+	end 
+end)]]
+
+local TweenService = game:GetService("TweenService")
+
+
+function touchDown(player)
+	-- auto punt?!
+	-- [cringe  ]
+	
+	print('TD RAN AGAIN!?!?!')
+	
+	if player.Team.Name == game.ReplicatedStorage.GameSettings.Team1.Value then
+		
+		if workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Transparency == 0 then
+			workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Transparency = 1 --[[ deal with changing the visuals to transparent]]
+			workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline').Transparency = 1
+			workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = false
+		end
+		
+			for i,v in pairs(game.Players:GetPlayers()) do
+				if v.Team.Name == game.ReplicatedStorage.GameSettings.Team1.Value then
+					-- later deal with not having a player and choosing a random player to kick
+					if v.Name == player.Name then
+						if workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam') then
+						player.Character.HumanoidRootPart.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam').Kicker.Position
+						local fb = game.ReplicatedStorage.FootballDrop:Clone()
+						fb.Parent = workspace
+						fb.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam'):FindFirstChild('BallSpawn').Position
+						game.ReplicatedStorage.SystemEvents.FieldGoalMeter:FireClient(player)
+						game.ReplicatedStorage.deletePowerUI:FireClient(player)
+						
+						end
+					end
+					
+				
+				--TpDefense()
+				
+				local spawnTables = {}
+
+				local spawns = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam'):GetChildren()
+				
+
+				for i,ppl in pairs(game.Players:GetPlayers()) do
+					if ppl.Team.Name == game.ReplicatedStorage.GameSettings.Team1.Value then
+						print('X1')
+						print(ppl.Name)
+						
+						for i,n in pairs(spawns) do
+							table.insert(spawnTables, n.Name)
+							if n.Name == 'Kicker' then
+								table.remove(spawnTables, table.find(spawnTables, n.Name))
+							end
+							local randomSpawn = spawns[math.random(1, #spawns)]
+							ppl.Character.HumanoidRootPart.Position = randomSpawn.Position
+							table.remove(spawnTables, table.find(spawnTables, n.Name))
+							
+							if ppl.Name == player.Name then
+								player.Character.HumanoidRootPart.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam').Kicker.Position
+							end
+						end
+					end
+				end
+				
+				local defenseSpawns = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('DefenseFieldGoal'):GetChildren()
+				local defenseSpawnTable = {}
+				
+				for i,defense in pairs(game.Players:GetPlayers()) do
+					if defense.Team.Name == game.ReplicatedStorage.GameSettings.Team2.Value then
+						print('T2')
+						for i,n in pairs(defenseSpawns) do
+							table.insert(defenseSpawnTable, defense.Name)
+							local randomSpawn = defenseSpawns[math.random(1, #defenseSpawnTable)]
+							defense.Character.HumanoidRootPart.Position = randomSpawn.Position
+							table.remove(defenseSpawnTable, table.find(defenseSpawnTable, defense.Name))
+						end
+					end
+				end
+				
+				
+				
+					
+					
+					for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+						if AllPlayersInGame.Character then
+							AllPlayersInGame.Character.Humanoid.WalkSpeed = 0
+						end
+					end
+					
+					local succ, err = pcall(function()
+						local s = game.ReplicatedStorage.SystemEvents.GetFieldGoalStatus:InvokeClient(player)
+						if s == 'NotGoodKick' then
+							-- bad kick
+							local crushgoal = {
+								Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('Team1BadFieldKick').Position
+							}
+
+							local crushinfo = TweenInfo.new(
+								2, -- Time animating
+								Enum.EasingStyle.Linear, -- EasingStyle
+								Enum.EasingDirection.Out, -- EasingDirection
+								0, -- Repitions
+								false, -- Reverse post tween?
+								0 -- Delay time
+							)
+
+							local crush = TweenService:Create(workspace:FindFirstChild('FootballDrop'), crushinfo, crushgoal)
+							print(crush.PlaybackState)
+							crush:Play()
+							workspace:FindFirstChild('FootballDrop').CanCollide = false
+
+						crush.Completed:Wait()
+						
+						
+						task.wait(3.5)
+
+
+						local PreGameText = ''
+						game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+						game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+						local TeamType = 'Team2'
+						game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'ReceivingPunt'
+						puntModule.Team1KickOff()
+						aimodule.SpawnAI(TeamType)
+
+						task.wait(3.5)
+						for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+							if AllPlayersInGame.Character then
+								AllPlayersInGame.Character.Humanoid.WalkSpeed = 16
+							end
+						end
+
+						-- [[ make it so you can kick the ball now]]
+
+						print('RETURNED FUNCTION')
+						eventsModule.StartScoreBoard()
+							
+						
+							
+						
+							
+						else
+							if s == 'GoodKick' then
+								
+								
+								
+								local crushgoal = {
+									Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('Team1FieldKick').Position
+								}
+								
+								local crushinfo = TweenInfo.new(
+									2, -- Time animating
+									Enum.EasingStyle.Linear, -- EasingStyle
+									Enum.EasingDirection.Out, -- EasingDirection
+									0, -- Repitions
+									false, -- Reverse post tween?
+									0 -- Delay time
+								)
+
+								local crush = TweenService:Create(workspace:FindFirstChild('FootballDrop'), crushinfo, crushgoal)
+								print(crush.PlaybackState)
+								crush:Play()
+								workspace:FindFirstChild('FootballDrop').CanCollide = false
+								
+								
+								crush.Completed:Wait()
+								local PreGameText = 'Kick Is Good!'
+								game.ReplicatedStorage.GameSettings.Team1Score.Value += 1
+								game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+								
+								--[[
+								mmake kick so the velocity is correct
+								do field goals for team2
+								tp the defense to field goal
+								do more testing
+								detect if the remote function did not return any value 
+								]]
+								
+								
+								
+							task.wait(3.5)
+
+
+							local PreGameText = ''
+							game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+							game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+							local TeamType = 'Team2'
+							game.ReplicatedStorage.Attributes.Ball.BallStatus.Value = 'ReceivingPunt'
+							puntModule.Team1KickOff()
+							aimodule.SpawnAI(TeamType)
+
+							task.wait(3.5)
+							for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+								if AllPlayersInGame.Character then
+									AllPlayersInGame.Character.Humanoid.WalkSpeed = 16
+								end
+							end
+
+							-- [[ make it so you can kick the ball now]]
+
+							print('RETURNED FUNCTION')
+							eventsModule.StartScoreBoard()
+								
+								
+								
+								
+							end
+						end
+					end)
+					
+				if err then warn (err) end	
+				
+				
+					
+					
+					
+					
+				
+			end
+		end
+	else
+		if player.Team.Name == game.ReplicatedStorage.GameSettings.Team2.Value then
+
+			if workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Transparency == 0 then
+				workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('scrimline').Transparency = 1 --[[ deal with changing the visuals to transparent]]
+				workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardline').Transparency = 1
+				workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('yardbarrier').CanCollide = false
+			end
+
+			for i,v in pairs(game.Players:GetPlayers()) do
+				if v.Team.Name == game.ReplicatedStorage.GameSettings.Team2.Value then
+					-- later deal with not having a player and choosing a random player to kick
+					if v.Name == player.Name then
+						if workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam') then
+							player.Character.HumanoidRootPart.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team1'):FindFirstChild('FieldGoalTeam').Kicker.Position
+							local fb = game.ReplicatedStorage.FootballDrop:Clone()
+							fb.Parent = workspace
+							fb.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team2'):FindFirstChild('FieldGoalTeam'):FindFirstChild('BallSpawn').Position
+							game.ReplicatedStorage.SystemEvents.FieldGoalMeter:FireClient(player)
+							game.ReplicatedStorage.deletePowerUI:FireClient(player)
+
+						end
+					end
+
+
+					--TpDefense()
+
+					local spawnTables = {}
+
+					local spawns = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team2'):FindFirstChild('FieldGoalTeam'):GetChildren()
+
+
+					for i,ppl in pairs(game.Players:GetPlayers()) do
+						if ppl.Team.Name == game.ReplicatedStorage.GameSettings.Team2.Value then
+							print('X1')
+							print(ppl.Name)
+
+							for i,n in pairs(spawns) do
+								table.insert(spawnTables, n.Name)
+								if n.Name == 'Kicker' then
+									table.remove(spawnTables, table.find(spawnTables, n.Name))
+								end
+								local randomSpawn = spawns[math.random(1, #spawns)]
+								ppl.Character.HumanoidRootPart.Position = randomSpawn.Position
+								table.remove(spawnTables, table.find(spawnTables, n.Name))
+
+								if ppl.Name == player.Name then
+									player.Character.HumanoidRootPart.Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team2'):FindFirstChild('FieldGoalTeam').Kicker.Position
+								end
+							end
+						end
+					end
+
+					local defenseSpawns = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('FieldGoalSpawns'):FindFirstChild('Team2'):FindFirstChild('DefenseFieldGoal'):GetChildren()
+					local defenseSpawnTable = {}
+
+					for i,defense in pairs(game.Players:GetPlayers()) do
+						if defense.Team.Name == game.ReplicatedStorage.GameSettings.Team1.Value then
+							print('T2')
+							for i,n in pairs(defenseSpawns) do
+								table.insert(defenseSpawnTable, defense.Name)
+								local randomSpawn = defenseSpawns[math.random(1, #defenseSpawnTable)]
+								defense.Character.HumanoidRootPart.Position = randomSpawn.Position
+								table.remove(defenseSpawnTable, table.find(defenseSpawnTable, defense.Name))
+							end
+						end
+					end
+
+
+
+
+
+					for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+						if AllPlayersInGame.Character then
+							AllPlayersInGame.Character.Humanoid.WalkSpeed = 0
+						end
+					end
+
+					local succ, err = pcall(function()
+						local s = game.ReplicatedStorage.SystemEvents.GetFieldGoalStatus:InvokeClient(player)
+						if s == 'NotGoodKick' then
+							-- bad kick
+							local crushgoal = {
+								Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('Team2BadFieldKick').Position
+							}
+
+							local crushinfo = TweenInfo.new(
+								2, -- Time animating
+								Enum.EasingStyle.Linear, -- EasingStyle
+								Enum.EasingDirection.Out, -- EasingDirection
+								0, -- Repitions
+								false, -- Reverse post tween?
+								0 -- Delay time
+							)
+
+							local crush = TweenService:Create(workspace:FindFirstChild('FootballDrop'), crushinfo, crushgoal)
+							print(crush.PlaybackState)
+							crush:Play()
+							workspace:FindFirstChild('FootballDrop').CanCollide = false
+
+
+							crush.Completed:Wait()
+							local PreGameText = 'Kick Is Not Good!'
+							game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+							task.wait(3.5)
+
+							local TeamType = 'Team2'
+							puntModule.Team1KickOff()
+							aimodule.SpawnAI(TeamType)
+
+							local PreGameText = ''
+							game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team2.Value
+							game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+							
+							
+							task.wait(3.5)
+
+
+							local PreGameText = ''
+							game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+							game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+							local TeamType = 'Team1'
+							puntModule.Team2KickOff()
+							aimodule.SpawnAI(TeamType)
+
+							task.wait(3.5)
+							for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+								if AllPlayersInGame.Character then
+									AllPlayersInGame.Character.Humanoid.WalkSpeed = 16
+								end
+							end
+							eventsModule.StartScoreBoard()
+
+							
+						else
+							if s == 'GoodKick' then
+
+
+
+								local crushgoal = {
+									Position = workspace:FindFirstChild(game.ReplicatedStorage.GameSettings.Team1.Value):FindFirstChild('Team2FieldKick').Position
+								}
+
+								local crushinfo = TweenInfo.new(
+									2, -- Time animating
+									Enum.EasingStyle.Linear, -- EasingStyle
+									Enum.EasingDirection.Out, -- EasingDirection
+									0, -- Repitions
+									false, -- Reverse post tween?
+									0 -- Delay time
+								)
+
+								local crush = TweenService:Create(workspace:FindFirstChild('FootballDrop'), crushinfo, crushgoal)
+								print(crush.PlaybackState)
+								crush:Play()
+								workspace:FindFirstChild('FootballDrop').CanCollide = false
+
+
+								crush.Completed:Wait()
+								local PreGameText = 'Kick Is Good!'
+								game.ReplicatedStorage.GameSettings.Team2Score.Value += 1
+								game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+								--[[
+								mmake kick so the velocity is correct
+								do field goals for team2
+								tp the defense to field goal
+								do more testing
+								detect if the remote function did not return any value 
+								]]
+
+
+								task.wait(3.5)
+
+
+								local PreGameText = ''
+								game.ReplicatedStorage.GameSettings.WhoHasBall.Value = game.ReplicatedStorage.GameSettings.Team1.Value
+								game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+								local TeamType = 'Team1'
+								puntModule.Team2KickOff()
+								aimodule.SpawnAI(TeamType)
+
+								task.wait(3.5)
+								for i,AllPlayersInGame in pairs(game.Players:GetPlayers()) do
+									if AllPlayersInGame.Character then
+										AllPlayersInGame.Character.Humanoid.WalkSpeed = 16
+									end
+								end
+								eventsModule.StartScoreBoard()
+
+								
+
+								
+							end
+						end
+					end)
+
+					if err then warn (err) end
+					
+					
+					-- [[ make it so you can kick the ball now]]
+
+					print('RETURNED FUNCTION')
+					
+					
+					
+					
+
+
+
+
+				end
+			end
+		end	
+	end		
+		
+	
+end
+
+local isTouchDown = false
+
+game.ReplicatedStorage.SystemEvents.PlayerTD.OnServerEvent:Connect(function(player)
+	print('received')
+	if player.Character:FindFirstChild('Football') and isTouchDown == false then
+		eventsModule.StopScoreBoard()
+		isTouchDown = true
+		print('football!?!?')
+		local TeamType = ''
+
+		if game.ReplicatedStorage.GameSettings.WhoHasBall.Value == game.ReplicatedStorage.GameSettings.Team1.Value then
+			TeamType = 'Team1'
+			game.ReplicatedStorage.GameSettings.Team1Score.Value += 6
+			local PreGameText = 'Touchdown!'
+			game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+			
+			if soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name) then
+				local sound = soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name):Clone()
+				sound.Parent = workspace
+				sound:Play()
+				
+				spawn(function()
+					task.wait(7.5)
+					sound:Destroy()
+				end)
+			else
+				if not soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name) then 
+					-- choose a random sound
+					local sounds = soundfolder:FindFirstChild('Touchdown'):GetChildren()
+					local randomSound = sounds[math.random(1, #sounds)]
+					randomSound:Clone().Parent = workspace
+					randomSound:Play()
+					spawn(function()
+						task.wait(7.5)
+						randomSound:Destroy()
+					end)
+				end
+				
+			end
+			
+			task.wait(7.5)
+			
+			if player.Character:FindFirstChild('Football') then
+				player.Character:FindFirstChild('Football'):Destroy()
+				touchDown(player)
+			
+			end
+			
+			
+				isTouchDown = false
+			
+			
+			
+		else
+			if game.ReplicatedStorage.GameSettings.WhoHasBall.Value == game.ReplicatedStorage.GameSettings.Team2.Value then
+				eventsModule.StopScoreBoard()
+					TeamType = 'Team2'
+					game.ReplicatedStorage.GameSettings.Team2Score.Value += 6
+					local PreGameText = 'Touchdown!'
+					game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+
+					if soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name) then
+						local sound = soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name):Clone()
+						sound.Parent = workspace
+						sound:Play()
+
+						spawn(function()
+							task.wait(7.5)
+							sound:Destroy()
+						end)
+					else
+						if not soundfolder:FindFirstChild('Touchdown'):FindFirstChild(player.Team.Name) then 
+							-- choose a random sound
+							local sounds = soundfolder:FindFirstChild('Touchdown'):GetChildren()
+							local randomSound = sounds[math.random(1, #sounds)]
+							randomSound:Clone().Parent = workspace
+							randomSound:Play()
+							spawn(function()
+								task.wait(7.5)
+								randomSound:Destroy()
+							end)
+						end
+
+					end
+
+					task.wait(7.5)
+
+					if player.Character:FindFirstChild('Football') then
+						player.Character:FindFirstChild('Football'):Destroy()
+						touchDown(player)
+
+					end
+
+
+					isTouchDown = false
+			end
+		end
+	end
+end)
+
+-- Loops
+
+
+while true do
+	task.wait(1)
+	if #game.Players:GetPlayers() >= module.Settings.REQUIRED_PLAYERS and AttributesFolder.GameStarted.Value == false then
+		print('There are enough players in-game')
+		local GameStarted = AttributesFolder.GameStarted
+		GameStarted.Value = true
+		PreGameText = 'Choosing Captains... '
+		game.ReplicatedStorage:FindFirstChild('SystemEvents'):FindFirstChild('PreGameInfo'):FireAllClients(PreGameText)
+		getTeamCaptains()
+		print(game.ReplicatedStorage.Attributes.Captain.TeamCap1.Value)
+		local Player1 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap1.Value)
+		local Player2 = game.Players:FindFirstChild(AttributesFolder.Captain.TeamCap2.Value)
+		eventsModule.UserInterface(Player1, Player2)
+
+	end
+end
